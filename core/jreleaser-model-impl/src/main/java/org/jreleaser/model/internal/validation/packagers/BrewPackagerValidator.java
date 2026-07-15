@@ -122,6 +122,7 @@ public final class BrewPackagerValidator {
             context.getLogger().debug(RB.$("validation.disabled.no.artifacts"));
             errors.warning(RB.$("WARNING.validation.packager.no.artifacts", distribution.getName(),
                 packager.getType(), packager.getSupportedFileExtensions(distribution.getType())));
+            warnIncompatibleDistributionType(distribution, packager, errors);
             packager.disable();
             return;
         }
@@ -298,5 +299,26 @@ public final class BrewPackagerValidator {
                     distributions.stream().map(Distribution::getName).collect(Collectors.joining(", "))));
             }
         });
+    }
+
+    private static void warnIncompatibleDistributionType(Distribution distribution, BrewPackager packager, Errors errors) {
+        Set<String> actualExtensions = distribution.getArtifacts().stream()
+            .map(a -> org.jreleaser.util.FileType.getExtension(a.getPath()))
+            .filter(ext -> !ext.isEmpty())
+            .collect(Collectors.toSet());
+
+        List<org.jreleaser.model.Distribution.DistributionType> compatibleTypes =
+            java.util.Arrays.stream(org.jreleaser.model.Distribution.DistributionType.values())
+                .filter(type -> type != distribution.getType())
+                .filter(packager::supportsDistribution)
+                .filter(type -> actualExtensions.stream()
+                    .anyMatch(ext -> packager.getSupportedFileExtensions(type).contains(ext)))
+                .collect(Collectors.toList());
+
+        if (!compatibleTypes.isEmpty()) {
+            errors.warning(RB.$("WARNING.validation.packager.incompatible.distribution.type",
+                distribution.getName(), packager.getType(), distribution.getType(),
+                actualExtensions, compatibleTypes));
+        }
     }
 }
